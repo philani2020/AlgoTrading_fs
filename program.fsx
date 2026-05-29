@@ -12,6 +12,8 @@ open FSharp.Core
 // We use a sample URL to bake the type system shapes at compile-time
 type YahooFinanceApi = JsonProvider<"https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=5d">
 
+
+
 /// Fetches raw historical market data and maps it cleanly to Skender Quotes
 let fetchSkenderQuotes (ticker: string) (range: string) : Quote list =
     let url = sprintf "https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=%s" ticker range
@@ -72,8 +74,8 @@ let runAnalysis (ticker: string) =
 
     let sma200Results = history.GetSma(200) 
                                 |> Seq.toArray
-                                
-                                
+
+    // let volume20 = history.GetVwma 20                                             
     let last5Sma50 = sma50Results 
                     |> Array.skip (sma50Results.Length - 5)
                     |> Array.map unWrapValue
@@ -88,7 +90,6 @@ let runAnalysis (ticker: string) =
     let latestRsi = rsiResults |> Array.last
 
     
-
     let withinRange = withinSpecifiedRange   latest50 latest200
     let bullish = isBullish last5Sma50 last5Sma200
     
