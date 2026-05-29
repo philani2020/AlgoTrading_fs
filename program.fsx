@@ -43,6 +43,21 @@ let fetchSkenderQuotes (ticker: string) (range: string) : Quote list =
 // -------------------------------------------------------------------
 // 2. Main Strategy Logic
 // -------------------------------------------------------------------
+
+let sma50IsBelowSma200 (sma50: float) (sma200: float) =
+    sma50 < sma200
+    
+let withinSpecifiedRange (sma50: float) (sma200: float) =
+    abs (sma200 - sma50 ) / sma200 <= 0.05
+
+let isBullish (sma50: float[]) (sma200: float[]) =
+    Seq.forall2 sma50IsBelowSma200 sma50 sma200
+    
+let unWrapValue (result: SmaResult) =
+    (result.Sma |> Option.ofNullable).Value
+            
+
+
 let runAnalysis (ticker: string) =
     printfn "============================================="
     printfn " Analyzing Ticker: %s" ticker
@@ -52,54 +67,35 @@ let runAnalysis (ticker: string) =
     let history = fetchSkenderQuotes ticker "2y"
 
     // Calculate Indicators using Skender C# Extension Methods natively in F#
-    let sma50Results  = history.GetSma(50)  |> Seq.toList
-    let sma200Results = history.GetSma(200) |> Seq.toList
-    let rsiResults    = history.GetRsi(14)  |> Seq.toList
+    let sma50Results  = history.GetSma(50)  
+                        |> Seq.toArray
 
-    // Zip historical indicators together by matching index/dates
-    // We parse from the tail end to look at the most recent market sessions
-    let totalElements = history.Length
-    printfn "Successfully loaded %d daily bars." totalElements
-    printfn "---------------------------------------------\n"
+    let sma200Results = history.GetSma(200) 
+                                |> Seq.toArray
+                                
+                                
+    let last5Sma50 = sma50Results 
+                    |> Array.skip (sma50Results.Length - 5)
+                    |> Array.map unWrapValue
+    let last5Sma200 = sma200Results 
+                    |> Array.skip (sma200Results.Length - 5)
+                    |> Array.map unWrapValue
 
-    printfn "%-12s | %-10s | %-10s | %-10s | %-6s" "Date" "Close" "50 SMA" "200 SMA" "RSI"
-    printfn "--------------------------------------------------------"
+    let rsiResults    = history.GetRsi(14)  |> Seq.toArray
 
-    // Display the last 5 trading days with their computed indicators
-    for i in (totalElements - 5) .. (totalElements - 1) do
-        let quote  = history.[i]
-        let sma50  = sma50Results.[i]
-        let sma200 = sma200Results.[i]
-        let rsi    = rsiResults.[i]
-        
-        // Skender returns nullable types or specific Result models depending on if periods are warm yet
-        let s50Str  = if sma50.Sma.HasValue  then sprintf "%8.2f" sma50.Sma.Value  else "Warming Up"
-        let s200Str = if sma200.Sma.HasValue then sprintf "%8.2f" sma200.Sma.Value else "Warming Up"
-        let rsiStr  = if rsi.Rsi.HasValue    then sprintf "%6.1f" rsi.Rsi.Value    else "N/A"
+    let latest50= sma50Results |> Array.last |> unWrapValue
+    let latest200 = sma200Results |> Array.last |> unWrapValue
+    let latestRsi = rsiResults |> Array.last
 
-        printfn "%s | %10.2f | %s | %s | %s" 
-            (quote.Date.ToString("yyyy-MM-dd")) 
-            quote.Close 
-            s50Str 
-            s200Str 
-            rsiStr
-
-    // Determine current market regime state
-    printfn "\n---------------------------------------------"
-    let latest50  = sma50Results |> List.last
-    let latest200 = sma200Results |> List.last
     
-    if latest50.Sma.HasValue && latest200.Sma.HasValue then
-        let diff = latest50.Sma.Value - latest200.Sma.Value
-        if diff > 0 then 
-            printfn "Regime State: Bullish Trend (50 SMA is %.2f above 200 SMA)" diff
-        else 
-            printfn "Regime State: Bearish Trend (50 SMA is %.2f below 200 SMA)" (abs diff)
-    else
-        printfn "Regime State: Insufficient history to establish crossover regime state."
-    printfn "=============================================\n"
 
-// Run execution against a liquid tech name
+    let withinRange = withinSpecifiedRange   latest50 latest200
+    let bullish = isBullish last5Sma50 last5Sma200
+    
+    if withinRange && bullish then  printfn "Ticker: %s is bullish" ticker
+    else printfn "Ticker: %s is bearish" ticker
+
+    
 let tickers = ["SHP.JO";"MTN.JO";"SOL.JO"]
 tickers |> Seq.iter runAnalysis
 
